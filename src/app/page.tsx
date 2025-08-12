@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,14 +77,8 @@ const loadStore = () => {
     return { songs: seedSongs(), templates: seedTemplates(), shoots: [], settings: { showVaultOnDashboard: true, confirmDeletions: true, defaultDuration: 60, defaultTimeOfDay: "Day" } };
   }
 };
-const saveStore = s => localStorage.setItem(LS_KEY, JSON.stringify(s));
-const backupStore = s => {
-  try {
-    const arr = JSON.parse(localStorage.getItem(BK_KEY) || "[]");
-    arr.unshift({ t: Date.now(), data: s });
-    localStorage.setItem(BK_KEY, JSON.stringify(arr.slice(0, 10)));
-  } catch {}
-};
+const saveStore = (s: any) => { if (typeof window !== 'undefined') { localStorage.setItem(LS_KEY, JSON.stringify(s)); } };
+const backupStore = (s: any) => { if (typeof window === 'undefined') return; try { const arr = JSON.parse(localStorage.getItem(BK_KEY) || "[]"); arr.unshift({ t: Date.now(), data: s }); localStorage.setItem(BK_KEY, JSON.stringify(arr.slice(0, 10))); } catch {} };
 
 function InfoTip({ text }) {
   return (
@@ -100,9 +96,9 @@ function InfoTip({ text }) {
 }
 
 export default function App() {
-  const [store, setStore] = useState(loadStore());
+  const [store, setStore] = useState(() => (typeof window !== 'undefined' ? loadStore() : { songs: seedSongs(), templates: seedTemplates(), shoots: [], settings: { showVaultOnDashboard: true, confirmDeletions: true, defaultDuration: 60, defaultTimeOfDay: "Day" } }));
   const [tab, setTab] = useState("dashboard");
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "dark");
+  const [theme, setTheme] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem(THEME_KEY) || "dark") : "dark"));
   const [filterNext7, setFilterNext7] = useState(false);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -1076,7 +1072,7 @@ function Settings({ store, onStore }) {
     setSongsText(songs.join("\n"));
     onStore({ ...store, songs });
   };
-  const backups = JSON.parse(localStorage.getItem(BK_KEY) || "[]");
+  const backups = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(BK_KEY) || "[]") : [];
   return (
     <div className="grid md:grid-cols-5 gap-4">
       <div className="md:col-span-1">
