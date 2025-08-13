@@ -176,7 +176,7 @@ export default function App() {
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Music2 className="h-6 w-6" />
-            <h1 className="text-2xl font-semibold">GAWNE – Planner</h1>
+            <h1 className="text-2xl font-semibold">GAWNE - Shoot Planner</h1>
             <Badge variant="secondary">v3.6.1</Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -410,7 +410,7 @@ function ShootList({ items, onOpen, onArchive, onStatus, onDelete, confirmDeleti
                 </AlertDialogContent>
               </AlertDialog>
             ) : (
-              <Button size="sm" variant="destructive" onClick={() => onDelete(s)}>
+              <Button size="sm" variant="destructive" className="cursor-pointer" onClick={() => onDelete(s)}>
                 Delete
               </Button>
             )}
