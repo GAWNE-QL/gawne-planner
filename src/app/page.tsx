@@ -171,14 +171,13 @@ export default function App() {
   const patchShoot = (id, patch) => updateStore({ shoots: store.shoots.map(s => (s.id === id ? { ...s, ...patch } : s)) });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground" style={{ scrollbarGutter: 'stable' }}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Music2 className="h-6 w-6" />
             <h1 className="text-2xl font-semibold">GAWNE – Planner</h1>
             <Badge variant="secondary">v3.6.1</Badge>
-            <InfoTip text="Dashboard shows all planned shoots. Vaulted (no date) listed below." />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => setTheme(t => (t === "dark" ? "light" : "dark"))}>
@@ -314,23 +313,35 @@ function QuickActions({ onBlank, onFromTemplate, templates }) {
           New Shoot
         </Button>
       </SheetTrigger>
-      <SheetContent>
+
+      {/* ⬇️ Bump z-index so it's above the overlay */}
+      <SheetContent className="z-[70] sm:max-w-md pointer-events-auto">
         <SheetHeader>
           <SheetTitle>Start</SheetTitle>
         </SheetHeader>
+
         <div className="mt-4 space-y-3">
           <Button className="w-full" variant="secondary" onClick={onBlank}>
             Blank
           </Button>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground pt-2">From Template</div>
+
+          <div className="text-xs uppercase tracking-wider text-muted-foreground pt-2">
+            From Template
+          </div>
+
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {templates.map(t => (
-              <Card key={t.id} className="cursor-pointer" onClick={() => onFromTemplate(t)}>
+            {templates.map((t) => (
+              <Card
+                key={t.id}
+                className="cursor-pointer"
+                onClick={() => onFromTemplate(t)}
+              >
                 <CardHeader>
                   <CardTitle className="text-base">{t.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  Fields: {t.fields.length} • Locations: {t.overview?.locations?.join(" • ") || "—"}
+                  Fields: {t.fields.length} • Locations:{" "}
+                  {t.overview?.locations?.join(" • ") || "—"}
                 </CardContent>
               </Card>
             ))}
@@ -374,10 +385,10 @@ function ShootList({ items, onOpen, onArchive, onStatus, onDelete, confirmDeleti
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" variant="secondary" onClick={() => onOpen(s)}>
+            <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => onOpen(s)}>
               Open
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => onArchive(s)}>
+            <Button size="sm" variant="ghost" className="cursor-pointer" onClick={() => onArchive(s)}>
               Archive
             </Button>
             {confirmDeletions ? (
@@ -514,8 +525,10 @@ function PlannerPortal({ store, onStore }) {
 
   return (
     <Dialog open onOpenChange={v => { if (!v) location.hash = ""; }}>
-      <DialogContent className="max-w-6xl w-[95vw] h-[90svh] max-h-[90svh] overflow-hidden p-0">
-        <div className="flex flex-col h-full">
+<DialogContent
+  className="max-w-none w-[95vw] h-[90svh] max-h-[90svh] overflow-hidden p-0 z-[50]"
+  style={{ width: "min(95vw, 1100px)", maxWidth: "min(95vw, 1100px)" }}
+>        <div className="flex flex-col h-full">
           <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-4 py-2 flex items-center justify-between">
             <div className="font-medium truncate">Planner – {shoot.name}</div>
             <div className="flex gap-2">
@@ -531,7 +544,7 @@ function PlannerPortal({ store, onStore }) {
                 <Smartphone className="h-4 w-4 mr-1" />
                 Shoot‑Day
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => (location.hash = "")}>Close</Button>
+              <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => (location.hash = "")}>Close</Button>
             </div>
           </div>
 
@@ -710,7 +723,7 @@ function SceneCard({ sc, fields, songs, onDuplicate, onRemove, onChange, onAddSo
       <div className="flex items-center justify-between">
         <div className="font-medium">{sc.values?.title || sc.title || "Scene"}</div>
         <div className="flex gap-2 print:hidden">
-          <Button size="sm" variant="secondary" onClick={onDuplicate}>
+          <Button size="sm" variant="secondary" className="cursor-pointer" onClick={onDuplicate}>
             <Copy className="h-4 w-4 mr-1" />
             Duplicate
           </Button>
@@ -926,7 +939,7 @@ function Templates({ store, onStore }) {
             <Textarea value={notes} onChange={e => setNotes(e.target.value)} />
           </Field>
           <div className="flex justify-end">
-            <Button onClick={create}>
+            <Button className="cursor-pointer" onClick={create}>
               <Plus className="h-4 w-4 mr-1" />
               Create
             </Button>
@@ -942,7 +955,7 @@ function Templates({ store, onStore }) {
               <div className="flex items-center justify-between">
                 <div className="font-medium">{t.name}</div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setEditing(t.id)}>
+                  <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => setEditing(t.id)}>
                     Edit
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => onStore({ templates: store.templates.filter(x => x.id !== t.id) })}>
@@ -1047,22 +1060,10 @@ function Templates({ store, onStore }) {
 }
 
 function Settings({ store, onStore }) {
-  const [page, setPage] = useState("general");
-  const [songsText, setSongsText] = useState(store.songs.join("\n"));
-  const [exportOpen, setExportOpen] = useState(false);
-  const [importText, setImportText] = useState("");
-  const doExport = () => {
-    setExportOpen(true);
-  };
-  const doImport = () => {
-    try {
-      const obj = JSON.parse(importText);
-      onStore(obj);
-      alert("Imported. Reload recommended.");
-    } catch (e) {
-      alert("Invalid JSON");
-    }
-  };
+  const [page, setPage] = React.useState<"general" | "songs" | "backups">("general");
+
+  // Songs editor
+  const [songsText, setSongsText] = React.useState(store.songs.join("\n"));
   const saveSongs = () => {
     const songs = songsText.split("\n").map(s => s.trim()).filter(Boolean);
     onStore({ ...store, songs });
@@ -1072,37 +1073,91 @@ function Settings({ store, onStore }) {
     setSongsText(songs.join("\n"));
     onStore({ ...store, songs });
   };
-  const backups = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(BK_KEY) || "[]") : [];
+
+  // Export / Import
+  const [exportOpen, setExportOpen] = React.useState(false);
+  const [importText, setImportText] = React.useState("");
+  const doExport = () => setExportOpen(true);
+  const doImport = () => {
+    try {
+      const obj = JSON.parse(importText);
+      onStore(obj);
+      alert("Imported. Reload recommended.");
+    } catch {
+      alert("Invalid JSON");
+    }
+  };
+
+  // Local backups (latest 10)
+  const backups =
+    typeof window !== "undefined" ? JSON.parse(localStorage.getItem(BK_KEY) || "[]") : [];
+
   return (
     <div className="grid md:grid-cols-5 gap-4">
+      {/* Left nav */}
       <div className="md:col-span-1">
-        <Card className="rounded-2xl shadow-sm"><CardHeader>
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
             <CardTitle className="text-base">Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant={page === "general" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => setPage("general")}>
+            <Button
+              variant={page === "general" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setPage("general")}
+            >
               General
             </Button>
-            <Button variant={page === "songs" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => setPage("songs")}>
+            <Button
+              variant={page === "songs" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setPage("songs")}
+            >
               Songs
+            </Button>
+            <Button
+              variant={page === "backups" ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setPage("backups")}
+            >
+              Backups
             </Button>
           </CardContent>
         </Card>
       </div>
-      <div className="md:col-span-4">
+
+      {/* Right panel */}
+      <div className="md:col-span-4 space-y-4">
         {page === "general" && (
-          <Card className="rounded-2xl shadow-sm"><CardHeader>
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
               <CardTitle>About & Data</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-3 text-muted-foreground">
-            <div className="grid md:grid-cols-2 gap-3 items-end">
-              <div>
-                <Label className="text-xs">Display name</Label>
-                <Input className="mt-1" placeholder="Your name" value={store.settings?.displayName || ""} onChange={e=>onStore({settings:{...store.settings, displayName:e.target.value}})} />
-                <p className="text-xs text-muted-foreground mt-1">Shown on the dashboard greeting only on this device.</p>
+              <div className="grid md:grid-cols-2 gap-3 items-end">
+                <div>
+                  <Label className="text-xs">Display name</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="Your name"
+                    value={store.settings?.displayName || ""}
+                    onChange={e =>
+                      onStore({
+                        settings: { ...store.settings, displayName: e.target.value },
+                      })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Shown in the greeting on this device only.
+                  </p>
+                </div>
               </div>
-            </div>
-            <p>Local prototype with offline autosave. Vault shows unscheduled shoots. Dark/Light mode persists.</p>
+
+              <p>
+                Local prototype with offline autosave. Vault shows unscheduled shoots.
+                Dark/Light mode persists.
+              </p>
+
               <div className="flex gap-2 flex-wrap">
                 <Button onClick={doExport}>Export JSON</Button>
                 <Dialog open={exportOpen} onOpenChange={setExportOpen}>
@@ -1114,44 +1169,115 @@ function Settings({ store, onStore }) {
                       <Label>Copy your data</Label>
                       <Textarea readOnly value={JSON.stringify(store, null, 2)} className="h-48" />
                       <Label className="mt-2">Paste JSON to import</Label>
-                      <Textarea value={importText} onChange={e => setImportText(e.target.value)} className="h-40" />
+                      <Textarea
+                        value={importText}
+                        onChange={e => setImportText(e.target.value)}
+                        className="h-40"
+                      />
                       <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setExportOpen(false)}>Close</Button>
+                        <Button variant="outline" onClick={() => setExportOpen(false)}>
+                          Close
+                        </Button>
                         <Button onClick={doImport}>Import</Button>
                       </div>
                     </div>
                   </DialogContent>
                 </Dialog>
               </div>
-              <div>
-                <Label className="text-xs">Backups (latest 10)</Label>
-                <div className="text-xs mt-1 space-y-1">
-                  {backups.map(b => (
-                    <div key={b.t} className="flex items-center justify-between border rounded px-2 py-1">
-                      <span>{new Date(b.t).toLocaleString()}</span>
-                      <Button size="sm" variant="outline" onClick={() => { onStore(b.data); alert("Restored backup."); }}>
-                        Restore
-                      </Button>
-                    </div>
-                  ))}
-                  {backups.length === 0 && <div className="text-xs">No backups yet.</div>}
-                </div>
-              </div>
             </CardContent>
           </Card>
         )}
+
         {page === "songs" && (
-          <Card className="rounded-2xl shadow-sm"><CardHeader>
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
               <CardTitle>Songs</CardTitle>
             </CardHeader>
             <CardContent>
               <Label className="text-sm">Songs (one per line)</Label>
-              <Textarea className="mt-2 h-60" value={songsText} onChange={e => setSongsText(e.target.value)} />
+              <Textarea
+                className="mt-2 h-60"
+                value={songsText}
+                onChange={e => setSongsText(e.target.value)}
+              />
               <div className="flex gap-2 mt-2">
                 <Button onClick={saveSongs}>Save Songs</Button>
-                <Button variant="outline" onClick={resetSongs}>Reset to Defaults</Button>
+                <Button variant="outline" onClick={resetSongs}>
+                  Reset to Defaults
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Populates the scene multi-select.</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Populates the scene multi-select.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {page === "backups" && (
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle>Backups</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                Local automatic backups keep the last 10 snapshots on this device only. Use
+                this page to restore or export. For team use, we’ll later move this to cloud
+                storage (Supabase) so it syncs across devices.
+              </p>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={doExport}>Export / Import JSON</Button>
+                <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Export / Import</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <Label>Copy your data</Label>
+                      <Textarea readOnly value={JSON.stringify(store, null, 2)} className="h-48" />
+                      <Label className="mt-2">Paste JSON to import</Label>
+                      <Textarea
+                        value={importText}
+                        onChange={e => setImportText(e.target.value)}
+                        className="h-40"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={() => setExportOpen(false)}>
+                          Close
+                        </Button>
+                        <Button onClick={doImport}>Import</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div>
+                <Label className="text-xs">Backups (latest 10 on this device)</Label>
+                <div className="text-xs mt-1 space-y-1">
+                  {backups.map(b => (
+                    <div
+                      key={b.t}
+                      className="flex items-center justify-between border rounded px-2 py-1"
+                    >
+                      <span>{new Date(b.t).toLocaleString()}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          onStore(b.data);
+                          alert("Restored backup.");
+                        }}
+                      >
+                        Restore
+                      </Button>
+                    </div>
+                  ))}
+                  {backups.length === 0 && (
+                    <div className="text-xs">No backups yet.</div>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1211,7 +1337,7 @@ function HelpPage() {
           <CardTitle>FAQ</CardTitle>
         </CardHeader>
         <CardContent>
-          <Accordion type="single" collapsible className="w-full">
+        <Accordion type="single" collapsible className="w-full" style={{ scrollbarGutter: 'stable' }}>
             {faqs.map((f, i) => (
               <AccordionItem key={i} value={`item-${i}`}>
                 <AccordionTrigger className="text-left text-sm md:text-base">{f.q}</AccordionTrigger>
@@ -1269,14 +1395,14 @@ function ShootDayMobile({ shoot, store, onStore }) {
     <Dialog open onOpenChange={v => { if (!v) location.hash = ""; }}>
       <DialogContent className="w-screen max-w-none h-[100svh] p-0 overflow-hidden">
         <div className="flex flex-col h-full">
-          <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-4 py-2 flex items-center justify-between">
+          <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center justify-between">
             <div className="font-medium truncate">Shoot‑Day – {shoot.name}</div>
             <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={() => (location.hash = `#planner:${shoot.id}`)}>Back</Button>
+              <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => (location.hash = `#planner:${shoot.id}`)}>Back</Button>
               <Button size="sm" onClick={() => (location.hash = "")}>Close</Button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
             <div className="text-sm text-muted-foreground mb-3">
               {(shoot.locations || []).join(" • ")} • {shoot.timeOfDay || "—"} • {shoot.duration}m
             </div>
@@ -1306,16 +1432,19 @@ function CallSheetPrint({ shoot }) {
   return (
     <Dialog open onOpenChange={v => { if (!v) location.hash = `#planner:${shoot.id}`; }}>
       <DialogContent className="max-w-3xl w-[95vw] p-0">
-        <div className="p-4 print:hidden flex items-center justify-between border-b">
-          <div className="font-medium">Call Sheet – {shoot.name}</div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-1" />
-              Print
-            </Button>
-            <Button variant="secondary" onClick={back}>Back</Button>
-          </div>
-        </div>
+      <div className="p-4 print:hidden flex items-center justify-between border-b">
+  <div className="font-medium">Call Sheet – {shoot.name}</div>
+  <div className="flex gap-2">
+  <Button variant="outline" onClick={() => window.print()}>
+    <Printer className="h-4 w-4 mr-1" />
+    Print
+  </Button>
+  <Button variant="secondary" onClick={back}>
+    <X className="h-4 w-4 mr-1" />
+    Close
+  </Button>
+</div>
+</div>
         <div className="p-4 text-sm print:p-0">
           <h2 className="text-lg font-semibold mb-2">{shoot.name}</h2>
           <div className="grid md:grid-cols-2 gap-3 mb-3">
