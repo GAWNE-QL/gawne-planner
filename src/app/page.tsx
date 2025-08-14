@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-
+import { supabase } from "@/lib/supabase";
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Plus, Music2, CalendarDays, Archive, Sun, Moon, MapPin, Upload, X, Trash2, Copy, Printer, Lightbulb, ListFilter, Smartphone } from "lucide-react";
+import { fetchShootsForUser, createShootFromTemplate, updateShoot, deleteShoot, fetchScenes, upsertScene, removeScene, getMyProfile } from "@/lib/db";
+
+
 
 const STATUSES = ["Not Started", "In Progress", "Shot", "In Edit", "Approved"];
 const PRIORITIES = ["Low", "Medium", "High"];
@@ -27,7 +30,7 @@ const LS_KEY = "gawne_store_v36";
 const THEME_KEY = "gawne_theme";
 const BK_KEY = "gawne_backups";
 const uid = () => Math.random().toString(36).slice(2, 10);
-const seedSongs = () => ["Chopper", "This Is War", "Swear Jar", "Lightning", "Untouchable"];
+const seedSongs = () => ["Chopper", "This Is War"];
 const seedTemplates = () => [
   {
     id: uid(),
@@ -103,6 +106,35 @@ export default function App() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [qArchive, setQArchive] = useState("");
+
+const [session, setSession] = useState<any | null | undefined>(undefined);
+
+const [role, setRole] = useState<'admin'|'videographer'>('videographer');
+const [shoots, setShoots] = useState<any[]>([]);
+  
+useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
+  const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+  return () => sub.subscription.unsubscribe();
+}, []);
+
+useEffect(() => {
+  if (session === null) window.location.replace("/signin");
+}, [session]);
+
+const user = session?.user; // { id, email, ... }
+
+
+useEffect(() => {
+  async function load() {
+    const profile = await getMyProfile();
+    setRole(profile.role);
+    const data = await fetchShootsForUser();
+    setShoots(data);
+  }
+  if (session) load().catch(console.error);
+}, [session]);
+
   useEffect(() => {
     if (store) {
       saveStore(store);
@@ -114,6 +146,21 @@ export default function App() {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
   if (!store) return <div className="p-6">Loading…</div>;
+
+async function removeShoot(shoot: Shoot) {
+  // --- optimistic update (simple + snappy) ---
+  const prev = store.shoots;
+  updateStore({ shoots: prev.filter(x => x.id !== shoot.id) });
+  try {
+    await deleteShoot(shoot.id, user?.id); // Supabase delete
+  } catch (err) {
+    // rollback on error
+    updateStore({ shoots: prev });
+    console.error(err);
+    alert("Couldn’t delete shoot. Please try again.");
+  }
+}
+
   const updateStore = patch => setStore(p => ({ ...p, ...patch }));
 
   const matchQ = (s, query) => {
@@ -146,29 +193,48 @@ export default function App() {
   }, [store.shoots, q, statusFilter]);
   const archived = useMemo(() => store.shoots.filter(s => s.archived).filter(s => matchQ(s, qArchive)), [store.shoots, qArchive]);
 
-  function addShoot(tpl) {
-    const id = uid();
-    const t = tpl || store.templates[0];
-    const d = store.settings;
-    const shoot = {
-      id,
-      name: tpl ? `${t.name} – Draft` : "Untitled Shoot",
-      date: "",
-      duration: t?.overview?.duration || d.defaultDuration,
-      locations: t?.overview?.locations || [],
-      weather: "",
-      timeOfDay: t?.overview?.timeOfDay || d.defaultTimeOfDay,
-      notes: t?.overview?.notes || "",
-      schemaTemplateId: t?.id,
-      scenes: [],
-      files: { raw: [], edits: [], approved: [] },
-      archived: false,
-      status: "Plan"
-    };
-    updateStore({ shoots: [shoot, ...store.shoots] });
-    window.location.hash = `#planner:${id}`;
-  }
-  const patchShoot = (id, patch) => updateStore({ shoots: store.shoots.map(s => (s.id === id ? { ...s, ...patch } : s)) });
+  // function addShoot(tpl) {
+  //   const id = uid();
+  //   const t = tpl || store.templates[0];
+  //   const d = store.settings;
+  //   const shoot = {
+  //     id,
+  //     name: tpl ? `${t.name} – Draft` : "Untitled Shoot",
+  //     date: "",
+  //     duration: t?.overview?.duration || d.defaultDuration,
+  //     locations: t?.overview?.locations || [],
+  //     weather: "",
+  //     timeOfDay: t?.overview?.timeOfDay || d.defaultTimeOfDay,
+  //     notes: t?.overview?.notes || "",
+  //     schemaTemplateId: t?.id,
+  //     scenes: [],
+  //     files: { raw: [], edits: [], approved: [] },
+  //     archived: false,
+  //     status: "Plan"
+  //   };
+  //   updateStore({ shoots: [shoot, ...store.shoots] });
+  //   window.location.hash = `#planner:${id}`;
+  // }
+
+async function addShoot(tpl?: any) {
+  const created = await createShootFromTemplate({
+    name: tpl ? `${tpl.name} – Draft` : "Untitled Shoot",
+    duration: tpl?.overview?.duration,
+    timeOfDay: tpl?.overview?.timeOfDay,
+    locations: tpl?.overview?.locations?.join(", ") || "",
+    notes: tpl?.overview?.notes || ""
+  });
+  setShoots(s => [created, ...s]);
+  window.location.hash = `#planner:${created.id}`;
+}
+
+
+  // const patchShoot = (id, patch) => updateStore({ shoots: store.shoots.map(s => (s.id === id ? { ...s, ...patch } : s)) });
+
+async function patchShoot(id: string, patch: any) {
+  await updateShoot(id, patch);
+  setShoots(s => s.map(x => x.id === id ? { ...x, ...patch } : x));
+}
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ scrollbarGutter: 'stable' }}>
@@ -185,6 +251,9 @@ export default function App() {
               <span className="ml-2 hidden md:inline">{theme === "dark" ? "Light" : "Dark"} Mode</span>
             </Button>
             <QuickActions onBlank={() => addShoot()} onFromTemplate={t => addShoot(t)} templates={store.templates} />
+          <Button variant="ghost" onClick={() => supabase.auth.signOut().then(()=> (window.location.href="/signin"))}>
+            Sign out
+            </Button>
           </div>
         </header>
 
@@ -241,7 +310,7 @@ export default function App() {
                   onOpen={s => openPlanner(s.id)}
                   onArchive={s => patchShoot(s.id, { archived: true })}
                   onStatus={(s, st) => patchShoot(s.id, { status: st })}
-                  onDelete={s => updateStore({ shoots: store.shoots.filter(x => x.id !== s.id) })}
+                  onDelete={removeShoot}
                   confirmDeletions={store.settings?.confirmDeletions !== false}
                 />
               </CardContent>
@@ -259,7 +328,7 @@ export default function App() {
                     onOpen={s => openPlanner(s.id)}
                     onArchive={s => patchShoot(s.id, { archived: true })}
                     onStatus={(s, st) => patchShoot(s.id, { status: st })}
-                    onDelete={s => updateStore({ shoots: store.shoots.filter(x => x.id !== s.id) })}
+                    onDelete={removeShoot}
                     confirmDeletions={store.settings?.confirmDeletions !== false}
                   />
                 </CardContent>
@@ -278,7 +347,7 @@ export default function App() {
                   onOpen={s => openPlanner(s.id)}
                   onArchive={s => patchShoot(s.id, { archived: true })}
                   onStatus={(s, st) => patchShoot(s.id, { status: st })}
-                  onDelete={s => updateStore({ shoots: store.shoots.filter(x => x.id !== s.id) })}
+                  onDelete={removeShoot}
                   confirmDeletions={store.settings?.confirmDeletions !== false}
                 />
               </CardContent>
@@ -563,7 +632,7 @@ function PlannerPortal({ store, onStore }) {
                   <Input type="number" value={shoot.duration} onChange={e => patch({ duration: Number(e.target.value || 0) })} />
                 </Field>
                 <Field label={<span className="inline-flex items-center gap-2">Locations <InfoTip text="Comma-separated" /></span>}>
-                  <Input value={(shoot.locations || []).join(", ")} onChange={e => patch({ locations: e.target.value ? e.target.value.split(",").map(v => v.trim()) : [] })} />
+                  <Input value={shoot.locations || ""} onChange={e => patch({ locations: e.target.value })} />
                 </Field>
                 <Field label={<span className="inline-flex items-center gap-2">Weather</span>}>
                   <Input value={shoot.weather || ""} onChange={e => patch({ weather: e.target.value })} />
