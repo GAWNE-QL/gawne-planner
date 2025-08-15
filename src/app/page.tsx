@@ -3,6 +3,10 @@
 export const dynamic = "force-dynamic";
 import { supabase } from "@/lib/supabase";
 import React, { useEffect, useMemo, useState } from "react";
+
+import { QuickActions } from "@/components/QuickActions";
+import { ShootList } from "@/components/ShootList";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +23,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Plus, Music2, CalendarDays, Archive, Sun, Moon, MapPin, Upload, X, Trash2, Copy, Printer, Lightbulb, ListFilter, Smartphone } from "lucide-react";
 import { fetchShootsForUser, createShootFromTemplate, updateShoot, deleteShoot, fetchScenes, upsertScene, removeScene, getMyProfile } from "@/lib/db";
-
 
 
 const STATUSES = ["Not Started", "In Progress", "Shot", "In Edit", "Approved"];
@@ -83,6 +85,17 @@ const loadStore = () => {
 const saveStore = (s: any) => { if (typeof window !== 'undefined') { localStorage.setItem(LS_KEY, JSON.stringify(s)); } };
 const backupStore = (s: any) => { if (typeof window === 'undefined') return; try { const arr = JSON.parse(localStorage.getItem(BK_KEY) || "[]"); arr.unshift({ t: Date.now(), data: s }); localStorage.setItem(BK_KEY, JSON.stringify(arr.slice(0, 10))); } catch {} };
 
+const toLocArray = (locs: unknown) =>
+  Array.isArray(locs)
+    ? locs
+    : (locs ? String(locs).split(",").map(s => s.trim()).filter(Boolean) : []);
+
+const normalizeShoot = (s: any) => ({
+  ...s,
+  files: s?.files ?? { raw: [], edits: [], approved: [] },
+});   
+
+
 function InfoTip({ text }) {
   return (
     <TooltipProvider>
@@ -124,13 +137,14 @@ useEffect(() => {
 
 const user = session?.user; // { id, email, ... }
 
-
 useEffect(() => {
   async function load() {
     const profile = await getMyProfile();
     setRole(profile.role);
     const data = await fetchShootsForUser();
-    setShoots(data);
+    const normalized = data.map(normalizeShoot);
+    setShoots(normalized);
+    updateStore({ shoots: normalized });
   }
   if (session) load().catch(console.error);
 }, [session]);
@@ -193,47 +207,43 @@ async function removeShoot(shoot: Shoot) {
   }, [store.shoots, q, statusFilter]);
   const archived = useMemo(() => store.shoots.filter(s => s.archived).filter(s => matchQ(s, qArchive)), [store.shoots, qArchive]);
 
-  // function addShoot(tpl) {
-  //   const id = uid();
-  //   const t = tpl || store.templates[0];
-  //   const d = store.settings;
-  //   const shoot = {
-  //     id,
-  //     name: tpl ? `${t.name} – Draft` : "Untitled Shoot",
-  //     date: "",
-  //     duration: t?.overview?.duration || d.defaultDuration,
-  //     locations: t?.overview?.locations || [],
-  //     weather: "",
-  //     timeOfDay: t?.overview?.timeOfDay || d.defaultTimeOfDay,
-  //     notes: t?.overview?.notes || "",
-  //     schemaTemplateId: t?.id,
-  //     scenes: [],
-  //     files: { raw: [], edits: [], approved: [] },
-  //     archived: false,
-  //     status: "Plan"
-  //   };
-  //   updateStore({ shoots: [shoot, ...store.shoots] });
-  //   window.location.hash = `#planner:${id}`;
-  // }
+  async function addShoot(tpl?: any) {
+    const created = await createShootFromTemplate({
+      name: tpl ? `${tpl.name} – Draft` : "Untitled Shoot",
+      duration: tpl?.overview?.duration,
+      timeOfDay: tpl?.overview?.timeOfDay,
+      locations: tpl?.overview?.locations?.join(", ") || "",
+      notes: tpl?.overview?.notes || "",
+    });
+  
+    const createdNorm = normalizeShoot(created);
+    setShoots((s) => [createdNorm, ...s]);
+    updateStore({ shoots: [createdNorm, ...store.shoots] });
+    window.location.hash = `#planner:${createdNorm.id}`;
+  }
 
-async function addShoot(tpl?: any) {
-  const created = await createShootFromTemplate({
-    name: tpl ? `${tpl.name} – Draft` : "Untitled Shoot",
-    duration: tpl?.overview?.duration,
-    timeOfDay: tpl?.overview?.timeOfDay,
-    locations: tpl?.overview?.locations?.join(", ") || "",
-    notes: tpl?.overview?.notes || ""
-  });
-  setShoots(s => [created, ...s]);
-  window.location.hash = `#planner:${created.id}`;
-}
 
+//ERROR ORIGINATES HERE
+// async function addShoot(tpl?: any) {
+//   const created = await createShootFromTemplate({
+//     name: tpl ? `${tpl.name} – Draft` : "Untitled Shoot",
+//     duration: tpl?.overview?.duration,
+//     timeOfDay: tpl?.overview?.timeOfDay,
+//     locations: tpl?.overview?.locations?.join(", ") || "",
+//     notes: tpl?.overview?.notes || ""
+//   });
+//   setShoots(s => [created, ...s]);
+//   window.location.hash = `#planner:${created.id}`;
+// }
 
   // const patchShoot = (id, patch) => updateStore({ shoots: store.shoots.map(s => (s.id === id ? { ...s, ...patch } : s)) });
 
 async function patchShoot(id: string, patch: any) {
   await updateShoot(id, patch);
-  setShoots(s => s.map(x => x.id === id ? { ...x, ...patch } : x));
+  setShoots(s => s.map(x => (x.id === id ? { ...x, ...patch } : x)));
+  updateStore({
+    shoots: store.shoots.map(x => (x.id === id ? { ...x, ...patch } : x)), // ✅ keep UI in sync
+  });
 }
 
   return (
@@ -259,7 +269,7 @@ async function patchShoot(id: string, patch: any) {
 
         <div className="flex items-center justify-between pt-1 pb-2">
           <div className="text-sm md:text-base font-medium">Hi, {store?.settings?.displayName || "Guest"}! <span className="ml-1">👋</span></div>
-          <div className="text-sm text-muted-foreground">{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date())}</div>
+          <div className="text-sm text-muted-foreground" suppressHydrationWarning>{new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date())}</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -373,123 +383,6 @@ async function patchShoot(id: string, patch: any) {
   }
 }
 
-function QuickActions({ onBlank, onFromTemplate, templates }) {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Shoot
-        </Button>
-      </SheetTrigger>
-
-      {/* ⬇️ Bump z-index so it's above the overlay */}
-      <SheetContent className="z-[70] sm:max-w-md pointer-events-auto">
-        <SheetHeader>
-          <SheetTitle>Start</SheetTitle>
-        </SheetHeader>
-
-        <div className="mt-4 space-y-3">
-          <Button className="w-full" variant="secondary" onClick={onBlank}>
-            Blank
-          </Button>
-
-          <div className="text-xs uppercase tracking-wider text-muted-foreground pt-2">
-            From Template
-          </div>
-
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {templates.map((t) => (
-              <Card
-                key={t.id}
-                className="cursor-pointer"
-                onClick={() => onFromTemplate(t)}
-              >
-                <CardHeader>
-                  <CardTitle className="text-base">{t.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Fields: {t.fields.length} • Locations:{" "}
-                  {t.overview?.locations?.join(" • ") || "—"}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function ShootList({ items, onOpen, onArchive, onStatus, onDelete, confirmDeletions }) {
-  if (!items || items.length === 0) return <p className="text-sm text-muted-foreground">Nothing here yet.</p>;
-  return (
-    <div className="space-y-3">
-      {items.map(s => (
-        <div key={s.id} className="p-3 rounded-xl border flex items-center justify-between hover:bg-accent/40 transition">
-          <div className="flex-1 min-w-0 space-y-1 cursor-pointer" onClick={() => onOpen(s)}>
-            <div className="font-medium truncate">{s.name}</div>
-            <div className="text-xs text-muted-foreground flex flex-wrap gap-2 items-center overflow-hidden">
-              <span className="truncate">{s.date ? new Date(s.date).toLocaleString() : "Unscheduled"}</span>
-              {s.locations?.length ? (
-                <span className="flex items-center gap-1 truncate">
-                  <MapPin className="h-3 w-3" />
-                  {s.locations.join(" • ")}
-                </span>
-              ) : null}
-              {s.timeOfDay ? <span className="truncate">{s.timeOfDay}</span> : null}
-              <span>Scenes: {s.scenes?.length || 0}</span>
-            </div>
-          </div>
-          <div className="shrink-0 flex items-center gap-2">
-            <Select value={s.status || "Plan"} onValueChange={v => onStatus(s, v)}>
-              <SelectTrigger className="w-28 md:w-32">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {["Plan", ...STATUSES].map(x => (
-                  <SelectItem key={x} value={x}>
-                    {x}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => onOpen(s)}>
-              Open
-            </Button>
-            <Button size="sm" variant="ghost" className="cursor-pointer" onClick={() => onArchive(s)}>
-              Archive
-            </Button>
-            {confirmDeletions ? (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="destructive">
-                    Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete this shoot?</AlertDialogTitle>
-                    <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onDelete(s)}>Delete</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : (
-              <Button size="sm" variant="destructive" className="cursor-pointer" onClick={() => onDelete(s)}>
-                Delete
-              </Button>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function PlannerPortal({ store, onStore }) {
   const [openId, setOpenId] = useState(null);
   const [mobileId, setMobileId] = useState(null);
@@ -590,7 +483,11 @@ function PlannerPortal({ store, onStore }) {
     patch({ files: { ...shoot.files, [kind]: bucket } });
   }
 
-  const bodyStyle = { maxHeight: "80svh", overflowY: "auto", WebkitOverflowScrolling: "touch" };
+  const bodyStyle: React.CSSProperties = {
+    maxHeight: "80svh",
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+  };
 
   return (
     <Dialog open onOpenChange={v => { if (!v) location.hash = ""; }}>
@@ -709,27 +606,29 @@ function PlannerPortal({ store, onStore }) {
                 <CardTitle>Files & Approval</CardTitle>
               </CardHeader>
               <CardContent className="grid md:grid-cols-3 gap-4">
-                <FileBucket
-                  title="Raw Footage"
-                  files={shoot.files.raw}
-                  onAdd={f => addFile("raw", f)}
-                  onStatus={(id, st) => setFileStatus("raw", id, st)}
-                  onNote={(id, n) => setFileNote("raw", id, n)}
-                />
-                <FileBucket
-                  title="Edits"
-                  files={shoot.files.edits}
-                  onAdd={f => addFile("edits", f)}
-                  onStatus={(id, st) => setFileStatus("edits", id, st)}
-                  onNote={(id, n) => setFileNote("edits", id, n)}
-                />
-                <FileBucket
-                  title="Approved"
-                  files={shoot.files.approved}
-                  onAdd={f => addFile("approved", f)}
-                  onStatus={(id, st) => setFileStatus("approved", id, st)}
-                  onNote={(id, n) => setFileNote("approved", id, n)}
-                />
+              <FileBucket
+                title="Raw Footage"
+                files={shoot.files?.raw ?? []}
+                onAdd={(f: File) => addFile("raw", f)}
+                onStatus={(id: string, st: "Pending" | "Approved" | "Rejected") => setFileStatus("raw", id, st)}
+                onNote={(id: string, n: string) => setFileNote("raw", id, n)}
+              />
+
+              <FileBucket
+                title="Edits"
+                files={shoot.files?.edits ?? []}
+                onAdd={(f: File) => addFile("edits", f)}
+                onStatus={(id: string, st: "Pending" | "Approved" | "Rejected") => setFileStatus("edits", id, st)}
+                onNote={(id: string, n: string) => setFileNote("edits", id, n)}
+              />
+
+              <FileBucket
+                title="Approved"
+                files={shoot.files?.approved ?? []}
+                onAdd={(f: File) => addFile("approved", f)}
+                onStatus={(id: string, st: "Pending" | "Approved" | "Rejected") => setFileStatus("approved", id, st)}
+                onNote={(id: string, n: string) => setFileNote("approved", id, n)}
+              />
               </CardContent>
             </Card>
           </div>
