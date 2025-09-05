@@ -1,70 +1,65 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-import React from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 
+type Template = { id: string; name: string };
+type Props = {
+  onBlank: () => void;
+  onFromTemplate: (t: Template) => void;
+  templates: Template[];
+};
 
-type Template = {
-    id: string;
-    name: string;
-    fields: unknown[];
-    overview?: { locations?: string[] };
-  };
+export function QuickActions({ onBlank, onFromTemplate, templates }: Props) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button className="cursor-pointer">
+          <Plus className="h-4 w-4 mr-2" />
+          New Shoot
+        </Button>
+      </DialogTrigger>
 
-type QuickActionsProps = {
-    onBlank: () => void;
-    onFromTemplate: (t: Template) => void;
-    templates: Template[];
-  };
+      <DialogContent className="max-w-md w-[92vw] p-0 overflow-hidden">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>Start</DialogTitle>
+        </DialogHeader>
 
-export function QuickActions({ onBlank, onFromTemplate, templates }: QuickActionsProps) {
-    return (
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button>
+        <div className="px-4 pb-4 space-y-3">
+          <Button className="w-full justify-start cursor-pointer" onClick={onBlank}>
             <Plus className="h-4 w-4 mr-2" />
-            New Shoot
+            Blank shoot
           </Button>
-        </SheetTrigger>
-  
-        {/* ⬇️ Bump z-index so it's above the overlay */}
-        <SheetContent className="z-[70] sm:max-w-md pointer-events-auto">
-          <SheetHeader>
-            <SheetTitle>Start</SheetTitle>
-          </SheetHeader>
-  
-          <div className="mt-4 space-y-3">
-            <Button className="w-full" variant="secondary" onClick={onBlank}>
-              Blank
-            </Button>
-  
-            <div className="text-xs uppercase tracking-wider text-muted-foreground pt-2">
-              From Template
-            </div>
-  
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {templates.map((t) => (
-                <Card
-                  key={t.id}
-                  className="cursor-pointer"
-                  onClick={() => onFromTemplate(t)}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-base">{t.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    Fields: {t.fields.length} • Locations:{" "}
-                    {t.overview?.locations?.join(" • ") || "—"}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+
+          <div className="text-xs text-muted-foreground px-1">From template</div>
+
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {templates.map((t) => (
+              <Button
+                key={t.id}
+                variant="outline"
+                className="w-full justify-start cursor-pointer"
+                onClick={() => onFromTemplate(t)}
+              >
+                {t.name}
+              </Button>
+            ))}
+
+            {templates.length === 0 && (
+              <div className="text-sm text-muted-foreground px-1">
+                No templates yet.
+              </div>
+            )}
           </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

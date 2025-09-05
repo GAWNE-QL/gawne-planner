@@ -12,28 +12,38 @@ export async function getMyProfile() {
   return data; // { user_id, role, display_name }
 }
 
+// keep your supabase import exactly as it is above
+
 export async function fetchShootsForUser() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) throw authErr;
   if (!user) throw new Error("No user");
 
-  // Admin sees all, videographer sees only theirs or assigned
-  const profile = await getMyProfile();
-  if (profile.role === "admin") {
+  // get the role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  // ADMIN: see all shoots
+  if (profile?.role === "admin") {
     const { data, error } = await supabase
       .from("shoots")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("date", { ascending: true, nullsFirst: true });
     if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from("shoots")
-      .select("*")
-      .or(`owner_id.eq.${user.id},assigned_to.eq.${user.id}`)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
+    return data ?? [];
   }
+
+  // VIDEOGRAPHER: only shoots assigned to me
+  const { data, error } = await supabase
+    .from("shoots")
+    .select("*")
+    .eq("assigned_user", user.id)
+    .order("date", { ascending: true, nullsFirst: true });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function createShootFromTemplate({ name, duration, timeOfDay, locations, notes, assigned_to }: {
