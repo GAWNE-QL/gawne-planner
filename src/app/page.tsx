@@ -121,78 +121,117 @@ function Field({ label, children }) {
 }
 
 function Templates({ store, onStore }) {
-  const [name, setName] = useState("");
-  const [locations, setLocations] = useState("");
-  const [duration, setDuration] = useState(60);
-  const [timeOfDay, setTimeOfDay] = useState("Day");
-  const [notes, setNotes] = useState("");
-  const [editing, setEditing] = useState(null);
+  // Create form state
+  const [name, setName] = React.useState("");
+  const [locations, setLocations] = React.useState("");
+  const [duration, setDuration] = React.useState(60);
+  const [timeOfDay, setTimeOfDay] = React.useState("Day");
+  const [notes, setNotes] = React.useState("");
+  const [editing, setEditing] = React.useState<string | null>(null);
+
+  // Create a new template
   const create = () => {
     if (!name.trim()) return;
     const tpl = {
       id: uid(),
       name: name.trim(),
-      overview: { duration, timeOfDay, notes, locations: locations ? locations.split(",").map(v => v.trim()) : [] },
-      fields: []
+      overview: {
+        duration,
+        timeOfDay,
+        notes,
+        locations: locations
+          ? locations.split(",").map(v => v.trim()).filter(Boolean)
+          : [],
+      },
+      fields: [],
     };
-    onStore({ templates: [tpl, ...store.templates] });
+    onStore({ templates: [tpl, ...(store.templates || [])] });
     setName("");
     setLocations("");
     setDuration(60);
     setTimeOfDay("Day");
     setNotes("");
   };
-  const update = (id, patch) => onStore({ templates: store.templates.map(t => (t.id === id ? { ...t, ...patch } : t)) });
-  const addField = t => update(t.id, { fields: [...t.fields, { id: uid(), key: `field_${Date.now()}`, label: "New Field", kind: "text" }] });
-  const removeField = (t, fid) => update(t.id, { fields: t.fields.filter(f => f.id !== fid) });
-  const moveField = (t, fid, dir) => {
-    const i = t.fields.findIndex(f => f.id === fid);
+
+  // Update one template by id (safe-merge overview)
+  const updateTpl = (id: string, patch: any) =>
+    onStore({
+      templates: (store.templates || []).map((x: any) =>
+        x.id === id
+          ? {
+              ...x,
+              ...patch,
+              overview: { ...(x.overview || {}), ...(patch.overview || {}) },
+            }
+          : x
+      ),
+    });
+
+  const addField = (tpl: any) =>
+    updateTpl(tpl.id, {
+      fields: [
+        ...(tpl.fields || []),
+        { id: uid(), key: `field_${Date.now()}`, label: "New Field", kind: "text" },
+      ],
+    });
+
+  const removeField = (tpl: any, fid: string) =>
+    updateTpl(tpl.id, { fields: (tpl.fields || []).filter((f: any) => f.id !== fid) });
+
+  const moveField = (tpl: any, fid: string, dir: number) => {
+    const fields = [...(tpl.fields || [])];
+    const i = fields.findIndex((f: any) => f.id === fid);
     if (i < 0) return;
-    const a = [...t.fields];
-    const ni = Math.max(0, Math.min(a.length - 1, i + dir));
-    const [sp] = a.splice(i, 1);
-    a.splice(ni, 0, sp);
-    update(t.id, { fields: a });
+    const ni = Math.max(0, Math.min(fields.length - 1, i + dir));
+    const [sp] = fields.splice(i, 1);
+    fields.splice(ni, 0, sp);
+    updateTpl(tpl.id, { fields });
   };
+
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      <Card className="rounded-2xl shadow-sm"><CardHeader className="flex items-center justify-between">
+      {/* Create Template */}
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="flex items-center justify-between">
           <CardTitle>Create Template</CardTitle>
           <InfoTip text="Templates define scene fields" />
         </CardHeader>
         <CardContent className="grid gap-3">
           <Field label="Name">
-            <Input value={name} onChange={e => setName(e.target.value)} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
+
           <Field label="Locations (comma)">
-            <Input value={locations} onChange={e => setLocations(e.target.value)} />
+            <Input value={locations} onChange={(e) => setLocations(e.target.value)} />
           </Field>
+
           <Field label="Duration (min)">
-            <Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value || 0))} />
+            <Input
+              type="number"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value || 0))}
+            />
           </Field>
+
           <Field label="Time of Day">
-            <Select
-              value={t.overview?.timeOfDay ?? undefined}
-              onValueChange={(v) =>
-                update(t.id, { overview: { ...t.overview, timeOfDay: v } })
-              }
-                    >
-            <SelectTrigger>
-              <SelectValue placeholder="Select" />
-            </SelectTrigger>
-            <SelectContent>
-              {/* IMPORTANT: no empty string items; filter out falsy just in case */}
-              {TIME_OF_DAY.filter(Boolean).map((v) => (
-                <SelectItem key={v} value={v}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-          <Field label="Notes">
-            <Textarea value={notes} onChange={e => setNotes(e.target.value)} />
+            <Select value={timeOfDay} onValueChange={setTimeOfDay}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_OF_DAY.filter(Boolean).map((v: string) => (
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
+
+          <Field label="Notes">
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </Field>
+
           <div className="flex justify-end">
             <Button className="cursor-pointer" onClick={create}>
               <Plus className="h-4 w-4 mr-1" />
@@ -201,59 +240,112 @@ function Templates({ store, onStore }) {
           </div>
         </CardContent>
       </Card>
-      <Card className="rounded-2xl shadow-sm"><CardHeader>
+
+      {/* Templates List */}
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader>
           <CardTitle>Templates</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 max-h-[60vh] overflow-y-auto">
-          {store.templates.map(t => (
-            <div key={t.id} className="border rounded-xl p-3">
+          {(store.templates || []).map((tpl: any) => (
+            <div key={tpl.id} className="border rounded-xl p-3">
               <div className="flex items-center justify-between">
-                <div className="font-medium">{t.name}</div>
+                <div className="font-medium">{tpl.name || "Untitled template"}</div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" className="cursor-pointer" onClick={() => setEditing(t.id)}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="cursor-pointer"
+                    onClick={() => setEditing(tpl.id)}
+                  >
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onStore({ templates: store.templates.filter(x => x.id !== t.id) })}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      onStore({
+                        templates: (store.templates || []).filter((x: any) => x.id !== tpl.id),
+                      })
+                    }
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground mt-1">Fields: {t.fields.length} • Locations: {t.overview?.locations?.join(" • ") || "—"}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Fields: {(tpl.fields || []).length} • Locations:{" "}
+                {tpl.overview?.locations?.join(" • ") || "—"}
+              </div>
             </div>
           ))}
-          {store.templates.length === 0 && <div className="text-sm text-muted-foreground">No templates yet.</div>}
+
+          {(store.templates || []).length === 0 && (
+            <div className="text-sm text-muted-foreground">No templates yet.</div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Edit dialog */}
       {editing && (
-        <Dialog open onOpenChange={v => !v && setEditing(null)}>
+        <Dialog open onOpenChange={(v) => !v && setEditing(null)}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Edit Template</DialogTitle>
             </DialogHeader>
-            {store.templates
-              .filter(t => t.id === editing)
-              .map(t => (
-                <div key={t.id} className="space-y-4">
+
+            {(store.templates || [])
+              .filter((x: any) => x.id === editing)
+              .map((tpl: any) => (
+                <div key={tpl.id} className="space-y-4">
                   <Field label="Name">
-                    <Input value={t.name} onChange={e => update(t.id, { name: e.target.value })} />
+                    <Input
+                      defaultValue={tpl.name || ""}
+                      onBlur={(e) => updateTpl(tpl.id, { name: e.currentTarget.value })}
+                    />
                   </Field>
+
                   <div className="grid md:grid-cols-2 gap-3">
                     <Field label="Locations">
                       <Input
-                        value={(t.overview?.locations || []).join(", ")}
-                        onChange={e => update(t.id, { overview: { ...t.overview, locations: e.target.value ? e.target.value.split(",").map(v => v.trim()) : [] } })}
+                        defaultValue={(tpl.overview?.locations || []).join(", ")}
+                        onBlur={(e) =>
+                          updateTpl(tpl.id, {
+                            overview: {
+                              locations: e.currentTarget.value
+                                ? e.currentTarget.value
+                                    .split(",")
+                                    .map((v) => v.trim())
+                                    .filter(Boolean)
+                                : [],
+                            },
+                          })
+                        }
                       />
                     </Field>
+
                     <Field label="Duration">
-                      <Input type="number" value={t.overview?.duration || 0} onChange={e => update(t.id, { overview: { ...t.overview, duration: Number(e.target.value || 0) } })} />
+                      <Input
+                        type="number"
+                        defaultValue={tpl.overview?.duration ?? 60}
+                        onBlur={(e) =>
+                          updateTpl(tpl.id, {
+                            overview: { duration: Number(e.currentTarget.value || 0) },
+                          })
+                        }
+                      />
                     </Field>
+
                     <Field label="Time of Day">
-                      <Select value={t.overview?.timeOfDay || "Day"} onValueChange={v => update(t.id, { overview: { ...t.overview, timeOfDay: v } })}>
+                      <Select
+                        value={tpl.overview?.timeOfDay || "Day"}
+                        onValueChange={(v) => updateTpl(tpl.id, { overview: { timeOfDay: v } })}
+                      >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Time of Day" />
                         </SelectTrigger>
                         <SelectContent>
-                          {TIME_OF_DAY.map(v => (
+                          {TIME_OF_DAY.filter(Boolean).map((v: string) => (
                             <SelectItem key={v} value={v}>
                               {v}
                             </SelectItem>
@@ -261,30 +353,54 @@ function Templates({ store, onStore }) {
                         </SelectContent>
                       </Select>
                     </Field>
+
                     <div className="md:col-span-2">
                       <Field label="Notes">
                         <Textarea
-                        value={t.overview?.notes ?? ""}
-                        onChange={e =>
-                          update(t.id, { overview: { ...t.overview, notes: e.target.value } })
-                        }
-                      />
+                          defaultValue={tpl.overview?.notes ?? ""}
+                          onBlur={(e) =>
+                            updateTpl(tpl.id, { overview: { notes: e.currentTarget.value } })
+                          }
+                        />
                       </Field>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
+
+                  <div className="flex items-center justify_between">
                     <div className="font-medium">Fields</div>
-                    <Button size="sm" onClick={() => addField(t)}>
+                    <Button size="sm" onClick={() => addField(tpl)}>
                       <Plus className="h-4 w-4 mr-1" />
                       Add Field
                     </Button>
                   </div>
+
                   <div className="space-y-2 max-h-[40vh] overflow-y-auto">
-                    {t.fields.map(f => (
+                    {(tpl.fields || []).map((f: any) => (
                       <div key={f.id} className="border rounded-lg p-2 flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">↕</span>
-                        <Input className="max-w-[12rem]" value={f.label} onChange={e => update(t.id, { fields: t.fields.map(x => (x.id === f.id ? { ...x, label: e.target.value } : x)) })} />
-                        <Select value={f.kind} onValueChange={v => update(t.id, { fields: t.fields.map(x => (x.id === f.id ? { ...x, kind: v } : x)) })}>
+
+                        <Input
+                          className="max-w-[12rem]"
+                          defaultValue={f.label}
+                          onBlur={(e) =>
+                            updateTpl(tpl.id, {
+                              fields: (tpl.fields || []).map((x: any) =>
+                                x.id === f.id ? { ...x, label: e.currentTarget.value } : x
+                              ),
+                            })
+                          }
+                        />
+
+                        <Select
+                          value={f.kind}
+                          onValueChange={(v) =>
+                            updateTpl(tpl.id, {
+                              fields: (tpl.fields || []).map((x: any) =>
+                                x.id === f.id ? { ...x, kind: v } : x
+                              ),
+                            })
+                          }
+                        >
                           <SelectTrigger className="w-40">
                             <SelectValue />
                           </SelectTrigger>
@@ -298,15 +414,24 @@ function Templates({ store, onStore }) {
                             <SelectItem value="checklist">Checklist</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Button size="icon" variant="outline" onClick={() => moveField(t, f.id, -1)}>↑</Button>
-                        <Button size="icon" variant="outline" onClick={() => moveField(t, f.id, 1)}>↓</Button>
-                        <Button size="icon" variant="ghost" onClick={() => removeField(t, f.id)}>
+
+                        <Button size="sm" variant="outline" onClick={() => moveField(tpl, f.id, -1)}>
+                          ↑
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => moveField(tpl, f.id, 1)}>
+                          ↓
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => removeField(tpl, f.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
-                    {t.fields.length === 0 && <div className="text-sm text-muted-foreground">No fields yet. Add one.</div>}
+
+                    {(tpl.fields || []).length === 0 && (
+                      <div className="text-sm text-muted-foreground">No fields yet. Add one.</div>
+                    )}
                   </div>
+
                   <div className="flex justify-end">
                     <Button onClick={() => setEditing(null)}>Done</Button>
                   </div>
@@ -318,6 +443,7 @@ function Templates({ store, onStore }) {
     </div>
   );
 }
+
 
 function Settings({ store, onStore }) {
   const [page, setPage] = React.useState<"general" | "songs" | "backups">("general");
@@ -971,6 +1097,7 @@ async function createShootFromUI() {
 }
 
 function PlannerPortal({ store, onStore, role, videographers }) {
+  const commitField = (key: string) => patch({ [key]: (draft as any)[key] });
   // --- 1) State (declare FIRST) ---
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [mobileId, setMobileId] = React.useState<string | null>(null);
@@ -985,9 +1112,8 @@ function PlannerPortal({ store, onStore, role, videographers }) {
   const shoot = plannerShoot;
   // Keep draft in sync with the store shoot open in Planner
   React.useEffect(() => {
-  setDraft({ scenes: shoot?.scenes || [] });
-  // Only when the currently open shoot changes
-}, [plannerShoot?.id, store.shoots]);
+    setDraft(d => ({ ...d, scenes: plannerShoot?.scenes || [] }));
+  }, [plannerShoot?.id, store.shoots]);
 
   // --- 3) Keep hash -> ids in state ---
   React.useEffect(() => {
@@ -1039,18 +1165,13 @@ const commitScenes = () => patch({ scenes: draft.scenes || [] });
 // Sort scenes by priority (High → Medium → Low), then commit to the store
 const autoOrderScenes = () => {
   const order: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
-
-  setDraft((d) => ({
-    ...d,
-    scenes: [...(d.scenes || [])].sort((a: any, b: any) => {
-      const ap = a.values?.priority ?? "Medium";
-      const bp = b.values?.priority ?? "Medium";
-      return (order[ap] ?? 1) - (order[bp] ?? 1);
-    }),
-  }));
-
-  // write the sorted order back to the store
-  commitScenes();
+  const sorted = [...(draft.scenes || [])].sort((a: any, b: any) => {
+    const ap = a.values?.priority ?? "Medium";
+    const bp = b.values?.priority ?? "Medium";
+    return (order[ap] ?? 1) - (order[bp] ?? 1);
+  });
+  setDraft(d => ({ ...d, scenes: sorted }));
+  patch({ scenes: sorted });          // <- commit the sorted list immediately
 };
 
 // Template & fields for this shoot
@@ -1300,7 +1421,7 @@ const updateSceneValue = (id: string, key: string, value: any) =>
             </Field>
 
               {/* Assigned Videographer */}
-                {role === "admin" ? (
+               {role === "admin" ? (
                   <Field label="Assigned Videographer">
                   <Select
                     value={shoot.assigned_user ?? "__none__"}
@@ -1322,15 +1443,14 @@ const updateSceneValue = (id: string, key: string, value: any) =>
                     </SelectContent>
                   </Select>
                 </Field>
-                ) : null}
-
+                ) : 
                 <Field label="Assigned Videographer">
                   <Badge variant="secondary">
                     {shoot.assigned_user
                       ? (videographers.find(x => x.user_id === shoot.assigned_user)?.display_name || 'Assigned')
                       : 'Unassigned'}
                   </Badge>
-                </Field>
+                </Field>}
 
                <Field label="General Notes" className="md:col-span-3">
                 <Textarea
@@ -1497,7 +1617,7 @@ function SceneCard({
         return (
           <Checklist
             value={Array.isArray(v) ? v : []}
-            onChange={(val) => { onChangeDraft(f.key, val); onCommit(); }}
+            onChange={(val) => { onChangeDraft(f.key, val);}}
           />
         );
 
